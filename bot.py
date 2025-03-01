@@ -26,7 +26,7 @@ async def on_ready():
 
 # 新增課表指令
 @bot.tree.command(name="add_timetable", description="新增課表")
-async def add_schedule(interaction: discord.Interaction, subject: str, weekday: str, start_time: str, end_time: str):
+async def add_schedule(interaction: discord.Interaction, subject: str, weekday: str, time_slot):
     user_id = interaction.user.id
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
@@ -59,7 +59,7 @@ async def delete_all_schedule(interaction: discord.Interaction):
     conn.close()
     await interaction.response.send_message("已刪除全部課表")
 
-# 批量導入課表指令
+# 批量導入課表指令(csv)
 @bot.tree.command(name="import_timetable", description="批量導入課表")
 async def import_schedule(interaction: discord.Interaction, file: discord.Attachment):
     user_id = interaction.user.id

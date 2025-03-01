@@ -10,9 +10,9 @@ def initialize_database():
         user_id INTEGER,
         subject TEXT,
         weekday TEXT,
-        start_time TEXT,
-        end_time TEXT,
-        PRIMARY KEY (user_id, subject, weekday, start_time, end_time)
+        time_slot TEXT,
+        PRIMARY KEY (user_id, subject, weekday, time_slot)
+        
     )
     """)
 
