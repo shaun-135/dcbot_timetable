@@ -28,8 +28,6 @@ async def on_ready():
     print(f"Bot is ready. 名稱 ---> {bot.user}")
     print(f"已載入 {command_count} 項指令")
 
-
-
 # 新增考試指令
 @bot.tree.command(name="add_exam", description="新增考試")
 async def add_exam(interaction: discord.Interaction, subject: str, date: str):
@@ -80,50 +78,17 @@ async def exam_check(interaction: discord.Interaction):
 
     await interaction.response.send_message(response)
 
-class Timeslot_select(Select):
-    def __init__(self, subject, weekday):
-        self.subject = subject
-        self.weekday = weekday
-        options = [            
-            discord.SelectOption(label="08:00-09:00", description="08:00-09:00"),
-            discord.SelectOption(label="09:00-10:00", description="09:00-10:00"),
-            discord.SelectOption(label="10:00-11:00", description="10:00-11:00"),
-            discord.SelectOption(label="11:00-12:00", description="11:00-12:00"),
-            discord.SelectOption(label="12:00-13:00", description="12:00-13:00"),
-            discord.SelectOption(label="13:00-14:00", description="13:00-14:00"),
-            discord.SelectOption(label="14:00-15:00", description="14:00-15:00"),
-            discord.SelectOption(label="15:00-16:00", description="15:00-16:00"),
-        ]
-        super().__init__(placeholder="請選擇時段", options=options min_values=1, max_values=1)
-    async def callback(self, interaction: discord.Interaction):
-        user_id = interaction.user.id
-        time_slot = self.values[0]
-        conn = sqlite3.connect("user.db")
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO schedule (user_id, subject, weekday, time_slot) VALUES (?, ?, ?, ?)",
-                       (user_id, self.subject, self.weekday, time_slot))
-        conn.commit()
-        conn.close()
-        await interaction.response.send_message(f"已新增課表: {self.subject} 在 {self.weekday} {time_slot}")
-
-class TimeSlotView(View):
-    def __init__(self, subject, weekday):
-        super().__init__()
-        self.add_item(Timeslot_select(subject, weekday))
-
-
-
-@bot.tree.command(name="select", description="顯示下拉選單")
-async def select(interaction: discord.Interaction):
-    view = MyView()
-    await interaction.response.send_message("請選擇一個選項：", view=view)
-
 # 新增課表指令
 @bot.tree.command(name="add_timetable", description="新增課表")
-async def add_timetable(interaction: discord.Interaction, subject: str, weekday: str):
-    view = TimeSlotView(subject, weekday)
-    await interaction.response.send_message("請選擇一個時間段：", view=view)
-
+async def add_timetable(interaction: discord.Interaction, subject: str, weekday: str, time_slot: str):
+    user_id = interaction.user.id
+    conn = sqlite3.connect("user.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO schedule (user_id, subject, weekday, time_slot) VALUES (?, ?, ?, ?)",
+                   (user_id, subject, weekday, time_slot))
+    conn.commit()
+    conn.close()
+    await interaction.response.send_message(f"已新增課表: {subject} 在 {weekday} {time_slot}")
 
 # 刪除課表指令
 @bot.tree.command(name="delete_timetable", description="刪除課表")
@@ -133,6 +98,23 @@ async def delete_timetable(interaction: discord.Interaction, subject: str, weekd
     cursor = conn.cursor()
     cursor.execute("DELETE FROM schedule WHERE user_id = ? AND subject = ? AND weekday = ? AND time_slot = ?",
                    (user_id, subject, weekday, time_slot))
+
+# 匯入課表指令
+@bot.tree.command(name="import_timetable", description="匯入課表")
+async def import_timetable(interaction: discord.Interaction, attachment: discord.Attachment):
+    file_path = f"./downloads/{attachment.filename}"
+    await attachment.save(file_path)
+    df = pd.read_csv(file_path)
+    if attachment.filename.endswith(".csv"):
+        import pandas as pd
+        df = pd.read_csv(file_path)
+        # 這裡可以進行進一步的處理，例如將數據插入資料庫
+        # ...
+        await interaction.response.send_message(f"已成功上傳並處理檔案: {attachment.filename}")
+    else:
+        await interaction.response.send_message("請上傳 CSV 檔案")
+    
+
 
 # 查看延遲指令
 @bot.tree.command(name="ping", description="查看延遲")
