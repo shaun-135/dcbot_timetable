@@ -12,6 +12,8 @@ import aiosqlite
 
 today = datetime.date.today()
 
+os.makedirs("./downloads", exist_ok=True)
+
 load_dotenv()
 token = os.getenv("DISCORD_BOT_TOKEN1")
 
@@ -25,6 +27,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     await bot.tree.sync()  # 同步指令
     command_count = len(bot.tree.get_commands())
+    
+    remind_exams.start()  # 啟動定時提醒考試任務
+    delete_expired_exams.start()  # 啟動刪除過期考試任務
+
     print(f"Bot is ready. 名稱 ---> {bot.user}")
     print(f"已載入 {command_count} 項指令")
 
@@ -102,14 +108,21 @@ async def delete_timetable(interaction: discord.Interaction, subject: str, weekd
 # 匯入課表指令
 @bot.tree.command(name="import_timetable", description="匯入課表")
 async def import_timetable(interaction: discord.Interaction, attachment: discord.Attachment):
+    user_id = interaction.user.id
     file_path = f"./downloads/{attachment.filename}"
     await attachment.save(file_path)
     df = pd.read_csv(file_path)
     if attachment.filename.endswith(".csv"):
         import pandas as pd
         df = pd.read_csv(file_path)
-        # 這裡可以進行進一步的處理，例如將數據插入資料庫
-        # ...
+        conn = sqlite3.connect("user.db")
+        cursor = conn.cursor()
+        for _, row in df.iterrows():
+            cursor.execute("INSERT INTO schedule (user_id, subject, weekday, time_slot) VALUES (?, ?, ?, ?)",
+                           (user_id, row["subject"], row["weekday"], row["time_slot"]))
+        conn.commit()
+        conn.close()
+        
         await interaction.response.send_message(f"已成功上傳並處理檔案: {attachment.filename}")
     else:
         await interaction.response.send_message("請上傳 CSV 檔案")
@@ -137,20 +150,32 @@ async def remind_exams():
         if days_left == 1:
             user = await bot.fetch_user(user_id)
             await user.send(f"明天有考試: {subject}")
+        elif days_left == 0:
+            user = await bot.fetch_user(user_id)
+            await user.send(f"今天有考試: {subject}")
 
 # 刪除過期考試
+@tasks.loop(hours=24)
 async def delete_expired_exams():
-    while True:
-        await asyncio.sleep(86400)  # 每天運行一次
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        async with aiosqlite.connect("user.db") as db:
-            await db.execute("DELETE FROM exams WHERE date < ?", (today,))
-            await db.commit()
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    async with aiosqlite.connect("user.db") as db:
+        await db.execute("DELETE FROM exams WHERE date < ?", (today,))
+        await db.commit()
 
-# 啟動主程式
-async def main():
-    asyncio.create_task(delete_expired_exams()) # 啟動刪除過期考試任務
+@tasks.loop(minutes=10)
+async def timetable_reminder():
+    conn = sqlite3.connect("user.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, subject, weekday, time_slot FROM schedule")
+    schedules = cursor.fetchall()
+    conn.close()
+    
+    today = datetime.datetime.now().strftime("%A")
+    current_time = datetime.datetime.now().strftime("%H:%M")
+    
+    for user_id, subject, weekday, time_slot in schedules:
+        if weekday == today and time_slot == current_time:
+            user = await bot.fetch_user(user_id)
+            await user.send(f"提醒: {subject} 即將開始")
 
-    remind_exams.start() # 啟動定時提醒考試任務
-
-bot.run(token)
+bot.run(token) # 啟動機器人
