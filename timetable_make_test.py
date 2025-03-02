@@ -2,12 +2,8 @@ import matplotlib.pyplot as plt
 
 # 示例數據
 data = [
-    ["Subject", "Hours", "Percentage"],
-    ["Math", 5, 20],
-    ["Science", 3, 15],
-    ["English", 4, 30],
-    ["History", 2, 10],
-    ["Art", 1, 25]
+    ["一", "二", "三", "四", "五",],
+    []
 ]
 
 # 創建圖形
