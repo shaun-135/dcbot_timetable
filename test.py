@@ -1,19 +1,17 @@
-import sqlite3
+import matplotlib.pyplot as plt
 
-# 連接到資料庫
-conn = sqlite3.connect("user.db")
-cursor = conn.cursor()
+# 創建一些數據和列標籤
+data = [["Apple", 10], ["Banana", 20], ["Orange", 30]]
+column_labels = ["Fruit", "Quantity"]
 
-# 查詢星期數字
-cursor.execute("SELECT subject, weekday FROM exams")
-exams = cursor.fetchall()
+# 創建一個圖和軸
+fig, ax = plt.subplots()
 
-# 星期名稱對應表
-week_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+# 關閉坐標軸顯示
+ax.axis("off")
 
-# 轉換為對應的星期名稱
-for subject, week_day in exams:
-    day_name = week_days[week_day - 1]  # 週日是7，對應列表索引6
-    print(f"{subject}: {day_name}")
-    
-conn.close()
+# 插入表格
+ax.table(cellText=data, colLabels=column_labels, loc="center",  cellLoc="center")
+
+# 顯示圖表
+plt.show()

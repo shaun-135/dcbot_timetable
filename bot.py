@@ -37,7 +37,7 @@ async def on_ready():
 # 新增考試指令
 @bot.tree.command(name="add_exam", description="新增考試")
 async def add_exam(interaction: discord.Interaction, subject: str, date: str):
-    user_id = interaction.user.id
+    userid = interaction.user.id
     try:
         # 確保日期格式正確
         datetime.datetime.strptime(date, "%Y-%m-%d")
@@ -47,7 +47,7 @@ async def add_exam(interaction: discord.Interaction, subject: str, date: str):
 
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO exams (user_id, subject, date) VALUES (?, ?, ?)", (user_id, subject, date))
+    cursor.execute("INSERT INTO exams (user_id, subject, date) VALUES (?, ?, ?)", (userid, subject, date))
     conn.commit()
     conn.close()
     await interaction.response.send_message(f"已新增考試: {subject} 在 {date}")
@@ -55,10 +55,10 @@ async def add_exam(interaction: discord.Interaction, subject: str, date: str):
 # 刪除考試指令
 @bot.tree.command(name="delete_exam", description="刪除考試")
 async def delete_exam(interaction: discord.Interaction, subject: str, date: str):
-    user_id = interaction.user.id
+    userid = interaction.user.id
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM exams WHERE user_id = ? AND subject = ? AND date = ?", (user_id, subject, date))
+    cursor.execute("DELETE FROM exams WHERE user_id = ? AND subject = ? AND date = ?", (userid, subject, date))
     conn.commit()
     conn.close()
     await interaction.response.send_message(f"已刪除考試: {subject} 在 {date}")
@@ -66,10 +66,10 @@ async def delete_exam(interaction: discord.Interaction, subject: str, date: str)
 # 查詢考試清單指令
 @bot.tree.command(name="exam_list", description="查詢考試清單")
 async def exam_check(interaction: discord.Interaction):
-    user_id = interaction.user.id
+    userid = interaction.user.id
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT subject, date FROM exams WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT subject, date FROM exams WHERE user_id = ?", (userid,))
     exams = cursor.fetchall()
     conn.close()
 
@@ -87,11 +87,11 @@ async def exam_check(interaction: discord.Interaction):
 # 新增課表指令
 @bot.tree.command(name="add_timetable", description="新增課表")
 async def add_timetable(interaction: discord.Interaction, subject: str, weekday: str, time_slot: str):
-    user_id = interaction.user.id
+    userid = interaction.user.id
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
     cursor.execute("INSERT INTO schedule (user_id, subject, weekday, time_slot) VALUES (?, ?, ?, ?)",
-                   (user_id, subject, weekday, time_slot))
+                   (userid, subject, weekday, time_slot))
     conn.commit()
     conn.close()
     await interaction.response.send_message(f"已新增課表: {subject} 在 {weekday} {time_slot}")
@@ -99,27 +99,26 @@ async def add_timetable(interaction: discord.Interaction, subject: str, weekday:
 # 刪除課表指令
 @bot.tree.command(name="delete_timetable", description="刪除課表")
 async def delete_timetable(interaction: discord.Interaction, subject: str, weekday: str, time_slot: str):
-    user_id = interaction.user.id
+    userid = interaction.user.id
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
     cursor.execute("DELETE FROM schedule WHERE user_id = ? AND subject = ? AND weekday = ? AND time_slot = ?",
-                   (user_id, subject, weekday, time_slot))
+                   (userid, subject, weekday, time_slot))
 
 # 匯入課表指令
 @bot.tree.command(name="import_timetable", description="匯入課表")
 async def import_timetable(interaction: discord.Interaction, attachment: discord.Attachment):
-    user_id = interaction.user.id
-    file_path = f"./downloads/{attachment.filename}"
+    userid = interaction.user.id
+    file_path = f"./downloads/{userid}_{attachment.filename}" # 指定檔案路徑，並避免檔名重複
     await attachment.save(file_path)
     df = pd.read_csv(file_path)
     if attachment.filename.endswith(".csv"):
-        import pandas as pd
         df = pd.read_csv(file_path)
         conn = sqlite3.connect("user.db")
         cursor = conn.cursor()
         for _, row in df.iterrows():
             cursor.execute("INSERT INTO schedule (user_id, subject, weekday, time_slot) VALUES (?, ?, ?, ?)",
-                           (user_id, row["subject"], row["weekday"], row["time_slot"]))
+                           (userid, row["subject"], row["weekday"], row["time_slot"]))
         conn.commit()
         conn.close()
         
@@ -127,6 +126,42 @@ async def import_timetable(interaction: discord.Interaction, attachment: discord
     else:
         await interaction.response.send_message("請上傳 CSV 檔案")
     
+# 查看課表指令
+@bot.tree.command(name="check_timetable", description="查看課表")
+async def check_timetable(interaction: discord.Interaction):
+    userid = interaction.user.id
+    conn = sqlite3.connect("user.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT subject, weekday, time_slot FROM schedule WHERE user_id = ?", (userid,))
+    timetable = cursor.fetchall()
+    conn.close()
+    if not timetable:
+        await interaction.response.send_message("沒有課表數據")
+        return
+    
+    # 設置中文字體
+    plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]  
+    
+    # 將數據轉換為 DataFrame
+    df = pd.DataFrame(timetable, columns=["subject", "weekday", "time_slot"])
+
+    # 生成課表圖表
+
+    fig, ax = plt.subplots()
+    column_labels = ["", "一", "二", "三", "四", "五"]
+    ax.axis("off")
+    ax.table(cellText=df.values, colLabels=column_labels, loc="center", cellLoc="center")
+    
+
+
+    # 保存圖表為圖像文件
+    chart_path = f"./downloads/{userid}_timetable_chart.png"
+    plt.savefig(chart_path)
+    plt.close()
+
+    # 發送圖像文件到 Discord
+    await interaction.response.send_message(file=discord.File(chart_path))
+
 
 
 # 查看延遲指令
