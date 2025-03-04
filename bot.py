@@ -7,7 +7,6 @@ import os
 import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
-import asyncio
 import aiosqlite
 
 today = datetime.date.today()
@@ -133,36 +132,85 @@ async def check_timetable(interaction: discord.Interaction):
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
     cursor.execute("SELECT subject, weekday, time_slot FROM schedule WHERE user_id = ?", (userid,))
-    timetable = cursor.fetchall()
+    timetable_data = cursor.fetchall()
     conn.close()
-    if not timetable:
+    if not timetable_data:
         await interaction.response.send_message("沒有課表數據")
         return
     
+    # 定義星期和時間對應表
+    weekday_map = {1: "週一", 2: "週二", 3: "週三", 4: "週四", 5: "週五"}
+    time_slot_map = {
+        1: "08:10～09:00",
+        2: "09:10～10:00",
+        3: "10:10～11:00",
+        4: "11:10～12:00",
+        5: "13:00～13:50",
+        6: "14:00～14:50",
+        7: "15:00～15:50",
+        8: "16:00～16:50",
+    }
+
     # 設置中文字體
     plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]  
     
     # 將數據轉換為 DataFrame
-    df = pd.DataFrame(timetable, columns=["subject", "weekday", "time_slot"])
+    df = pd.DataFrame(timetable_data, columns=["subject", "weekday", "time_slot"])
 
-    # 生成課表圖表
+    # 創建一個空的課表
+    timetable=[[""for _ in range (5)]for _ in range(8)]
 
-    fig, ax = plt.subplots()
-    column_labels = ["", "一", "二", "三", "四", "五"]
-    ax.axis("off")
-    ax.table(cellText=df.values, colLabels=column_labels, loc="center", cellLoc="center")
-    
+    # 將數據填入課表
+    for _, row in df.iterrows():
+        day = int(row["weekday"]) - 1
+        period = int(row["time_slot"]) - 1
+        timetable[period][day] = row["subject"]
 
+    # 繪製課表表格
+    fig, ax = plt.subplots(figsize=(10, 16))
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_frame_on(False)
+
+    # 設定表格內容
+    table = ax.table(
+        cellText=timetable,
+        colLabels=[weekday_map[i] for i in range(1, 6)],
+        rowLabels=[time_slot_map[i] for i in range(1, 9)],
+        cellLoc="center",
+        loc="center"
+    )
+
+    # 調整表格外觀
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1, 4.2)
+    fig.set_size_inches(6.5, 10.4)
+
+    # 調整圖表的邊距
+    plt.subplots_adjust(left=0.2, right=0.8, top=0.8, bottom=0.2)
+
+    # 設定表格顏色與樣式
+    for (i, j), cell in table.get_celld().items():
+        cell.set_edgecolor("gray")  # 改為灰色邊框
+        cell.set_linewidth(0.6)  # 更細的邊框，讓視覺更輕盈
+        cell.set_text_props(ha="center", va="center")  # 內容置中
+        
+        # 設定標題列（colLabels）與索引列（rowLabels）的樣式
+        if i == 0 or j == -1:
+            cell.set_facecolor("#34495e")  # 深灰藍色
+            cell.set_text_props(color="white", fontweight="bold")
+        
+        # 交錯行底色（提升可讀性）
+        elif i % 2 == 0:
+            cell.set_facecolor("#ecf0f1")  # 淡灰色背景
 
     # 保存圖表為圖像文件
     chart_path = f"./downloads/{userid}_timetable_chart.png"
-    plt.savefig(chart_path)
-    plt.close()
+    plt.savefig(chart_path, bbox_inches="tight", pad_inches=0.05)
 
     # 發送圖像文件到 Discord
     await interaction.response.send_message(file=discord.File(chart_path))
-
-
 
 # 查看延遲指令
 @bot.tree.command(name="ping", description="查看延遲")
@@ -197,20 +245,40 @@ async def delete_expired_exams():
         await db.execute("DELETE FROM exams WHERE date < ?", (today,))
         await db.commit()
 
-@tasks.loop(minutes=10)
+# 定時提醒課表
+@tasks.loop(minutes=5)
 async def timetable_reminder():
     conn = sqlite3.connect("user.db")
     cursor = conn.cursor()
     cursor.execute("SELECT user_id, subject, weekday, time_slot FROM schedule")
-    schedules = cursor.fetchall()
+    timetable = cursor.fetchall()
     conn.close()
     
-    today = datetime.datetime.now().strftime("%A")
+    start_time = {
+        1: "08:10",
+        2: "09:10",
+        3: "10:10",
+        4: "11:10",
+        5: "13:00",
+        6: "14:00",
+        7: "15:00",
+        8: "16:00",
+    }
+
+    today = datetime.datetime.now().weekday() + 1  # 獲取今天是星期幾
     current_time = datetime.datetime.now().strftime("%H:%M")
     
-    for user_id, subject, weekday, time_slot in schedules:
-        if weekday == today and time_slot == current_time:
-            user = await bot.fetch_user(user_id)
-            await user.send(f"提醒: {subject} 即將開始")
+    for user_id, subject, weekday, time_slot in timetable:
+        if int(weekday) == today:  # 轉成數字比對
+            start_time_dt = datetime.datetime.strptime(start_time[int(time_slot)], "%H:%M").time()
+            current_time_dt = datetime.datetime.strptime(current_time, "%H:%M").time()
+
+            # 計算時間差（分鐘）
+            time_diff = (datetime.datetime.combine(datetime.date.today(), start_time_dt) - 
+                         datetime.datetime.combine(datetime.date.today(), current_time_dt)).total_seconds() / 60
+
+            if 0 < time_diff <= 5:
+                user = await bot.fetch_user(user_id)
+                await user.send(f"提醒: {subject} 即將開始")
 
 bot.run(token) # 啟動機器人
