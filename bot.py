@@ -36,6 +36,12 @@ async def on_ready():
     print(f"Bot is ready. 名稱 ---> {bot.user}")
     print(f"已載入 {command_count} 項指令")
 
+
+
+
+
+
+
 # 新增考試指令
 @bot.tree.command(name="add_exam", description="新增考試")
 async def add_exam(interaction: discord.Interaction, subject: str, date: str):
@@ -155,7 +161,7 @@ async def check_timetable(interaction: discord.Interaction):
     }
 
     # 設置中文字體
-    plt.rcParams["font.sans-serif"] = ["Microsoft JhengHei"]  
+    plt.rcParams["font.sans-serif"] = ["Arial Unicode MS"]  
     
     # 將數據轉換為 DataFrame
     df = pd.DataFrame(timetable_data, columns=["subject", "weekday", "time_slot"])
@@ -284,4 +290,4 @@ async def timetable_reminder():
                 await user.send(f"提醒: {subject} 即將開始")
 
 webserver.keep_alive()
-bot.start(token)
+bot.run(token)
