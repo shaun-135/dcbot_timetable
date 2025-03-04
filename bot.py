@@ -8,6 +8,8 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import aiosqlite
+import asyncio
+from flask import Flask
 
 today = datetime.date.today()
 
@@ -248,11 +250,10 @@ async def delete_expired_exams():
 # 定時提醒課表
 @tasks.loop(minutes=5)
 async def timetable_reminder():
-    conn = sqlite3.connect("user.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT user_id, subject, weekday, time_slot FROM schedule")
-    timetable = cursor.fetchall()
-    conn.close()
+    async with aiosqlite.connect("user.db") as db:
+        async with db.execute("SELECT user_id, subject, weekday, time_slot FROM schedule") as cursor:
+            timetable = await cursor.fetchall()
+
     
     start_time = {
         1: "08:10",
@@ -281,4 +282,22 @@ async def timetable_reminder():
                 user = await bot.fetch_user(user_id)
                 await user.send(f"提醒: {subject} 即將開始")
 
-bot.run(token) # 啟動機器人
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running!"
+
+async def run_discord_bot():
+    await bot.start(token)
+
+def run_flask_app():
+    port = int(os.environ.get("PORT", 5000)) 
+    print(f"PORT environment variable: {os.environ.get('PORT')}")
+    print(f"Starting Flask app on port {port}...")
+    app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, run_flask_app)  # Run Flask in a background thread
+    loop.run_until_complete(run_discord_bot())  # Run the Discord bot
