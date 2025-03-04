@@ -164,7 +164,7 @@ async def check_timetable(interaction: discord.Interaction):
     # 設置中文字體
     font_path = "microsoft_zhenghei.ttf"  # 替換為你的字體路徑
     font_prop = font_manager.FontProperties(fname=font_path)
-    plt.rcParams["font.sans-serif"] = font_prop.get_name()  # 設置整體字體
+    plt.rcParams["font.sans-serif"] = [font_prop.get_name()]  # 設置整體字體
     
     # 將數據轉換為 DataFrame
     df = pd.DataFrame(timetable_data, columns=["subject", "weekday", "time_slot"])
