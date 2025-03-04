@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import aiosqlite
 import webserver
+from matplotlib import font_manager
 
 
 
@@ -36,11 +37,11 @@ async def on_ready():
     print(f"Bot is ready. 名稱 ---> {bot.user}")
     print(f"已載入 {command_count} 項指令")
 
-
-
-
-
-
+@bot.event
+async def on_disconnect():
+    remind_exams.cancel()
+    delete_expired_exams.cancel()
+    timetable_reminder.cancel()
 
 # 新增考試指令
 @bot.tree.command(name="add_exam", description="新增考試")
@@ -161,7 +162,9 @@ async def check_timetable(interaction: discord.Interaction):
     }
 
     # 設置中文字體
-    plt.rcParams["font.sans-serif"] = ["Arial Unicode MS"]  
+    font_path = "microsoft_zhenghei.ttf"  # 替換為你的字體路徑
+    font_prop = font_manager.FontProperties(fname=font_path)
+    plt.rcParams["font.sans-serif"] = font_prop.get_name()  # 設置整體字體
     
     # 將數據轉換為 DataFrame
     df = pd.DataFrame(timetable_data, columns=["subject", "weekday", "time_slot"])
