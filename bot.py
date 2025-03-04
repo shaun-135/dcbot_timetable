@@ -8,8 +8,9 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import aiosqlite
-import asyncio
-from flask import Flask
+import webserver
+
+
 
 today = datetime.date.today()
 
@@ -282,4 +283,5 @@ async def timetable_reminder():
                 user = await bot.fetch_user(user_id)
                 await user.send(f"提醒: {subject} 即將開始")
 
+webserver.keep_alive()
 bot.start(token)
