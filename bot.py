@@ -11,7 +11,7 @@ import aiosqlite
 import webserver
 from matplotlib import font_manager
 
-
+font_path = os.path.join(os.getcwd(), 'microsoft_zhenghei.ttf')
 
 today = datetime.date.today()
 
@@ -162,7 +162,6 @@ async def check_timetable(interaction: discord.Interaction):
     }
 
     # 設置中文字體
-    font_path = "microsoft_zhenghei.ttf"  # 替換為你的字體路徑
     font_prop = font_manager.FontProperties(fname=font_path)
     plt.rcParams["font.sans-serif"] = [font_prop.get_name()]  # 設置整體字體
     
@@ -258,7 +257,7 @@ async def delete_expired_exams():
         await db.commit()
 
 # 定時提醒課表
-@tasks.loop(minutes=5)
+@tasks.loop(seconds=5)
 async def timetable_reminder():
     async with aiosqlite.connect("user.db") as db:
         async with db.execute("SELECT user_id, subject, weekday, time_slot FROM schedule") as cursor:
