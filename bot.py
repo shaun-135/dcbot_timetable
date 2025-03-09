@@ -8,10 +8,6 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import aiosqlite
-import webserver
-from matplotlib import font_manager
-
-font_path = os.path.join(os.getcwd(), 'microsoft_zhenghei.ttf')
 
 today = datetime.date.today()
 
@@ -31,8 +27,10 @@ async def on_ready():
     await bot.tree.sync()  # 同步指令
     command_count = len(bot.tree.get_commands())
     
-    remind_exams.start()  # 啟動定時提醒考試任務
-    delete_expired_exams.start()  # 啟動刪除過期考試任務
+    # 啟動定時任務
+    timetable_reminder.start() 
+    remind_exams.start() 
+    delete_expired_exams.start()  
 
     print(f"Bot is ready. 名稱 ---> {bot.user}")
     print(f"已載入 {command_count} 項指令")
@@ -130,7 +128,8 @@ async def import_timetable(interaction: discord.Interaction, attachment: discord
                            (userid, row["subject"], row["weekday"], row["time_slot"]))
         conn.commit()
         conn.close()
-        
+        os.remove(file_path)
+
         await interaction.response.send_message(f"已成功上傳並處理檔案: {attachment.filename}")
     else:
         await interaction.response.send_message("請上傳 CSV 檔案")
@@ -151,27 +150,17 @@ async def check_timetable(interaction: discord.Interaction):
     # 定義星期和時間對應表
     weekday_map = {1: "週一", 2: "週二", 3: "週三", 4: "週四", 5: "週五"}
     time_slot_map = {
-        1: "08:10～09:00",
-        2: "09:10～10:00",
-        3: "10:10～11:00",
-        4: "11:10～12:00",
-        5: "13:00～13:50",
-        6: "14:00～14:50",
-        7: "15:00～15:50",
-        8: "16:00～16:50",
+        1: "08:10～09:00", 2: "09:10～10:00", 3: "10:10～11:00", 4: "11:10～12:00",
+        5: "13:00～13:50", 6: "14:00～14:50", 7: "15:00～15:50", 8: "16:00～16:50",
     }
-
-    # 設置中文字體
-    font_prop = font_manager.FontProperties(fname=font_path)
-    plt.rcParams["font.sans-serif"] = [font_prop.get_name()]  # 設置整體字體
     
     # 將數據轉換為 DataFrame
     df = pd.DataFrame(timetable_data, columns=["subject", "weekday", "time_slot"])
 
-    # 創建一個空的課表
+    # 創建空的二維數據
     timetable=[[""for _ in range (5)]for _ in range(8)]
 
-    # 將數據填入課表
+    # 將資料填入課表
     for _, row in df.iterrows():
         day = int(row["weekday"]) - 1
         period = int(row["time_slot"]) - 1
@@ -182,6 +171,9 @@ async def check_timetable(interaction: discord.Interaction):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_frame_on(False)
+
+    # 設置中文字體
+    plt.rcParams["font.sans-serif"] = ['Microsoft JhengHei']  # 設置整體字體
 
     # 設定表格內容
     table = ax.table(
@@ -207,14 +199,14 @@ async def check_timetable(interaction: discord.Interaction):
         cell.set_linewidth(0.6)  # 更細的邊框，讓視覺更輕盈
         cell.set_text_props(ha="center", va="center")  # 內容置中
         
-        # 設定標題列（colLabels）與索引列（rowLabels）的樣式
+        # 設定坐標軸的樣式
         if i == 0 or j == -1:
-            cell.set_facecolor("#34495e")  # 深灰藍色
+            cell.set_facecolor("#34495e")  # 深藍
             cell.set_text_props(color="white", fontweight="bold")
         
-        # 交錯行底色（提升可讀性）
+        # 交錯底色
         elif i % 2 == 0:
-            cell.set_facecolor("#ecf0f1")  # 淡灰色背景
+            cell.set_facecolor("#ecf0f1")  # 淡灰
 
     # 保存圖表為圖像文件
     chart_path = f"./downloads/{userid}_timetable_chart.png"
@@ -227,6 +219,14 @@ async def check_timetable(interaction: discord.Interaction):
 @bot.tree.command(name="ping", description="查看延遲")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(f"延遲: {round(bot.latency * 1000)}ms")
+
+# 刪除過期考試
+@tasks.loop(hours=24)
+async def delete_expired_exams():
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    async with aiosqlite.connect("user.db") as db:
+        await db.execute("DELETE FROM exams WHERE date < ?", (today,))
+        await db.commit()
 
 # 定時提醒考試
 @tasks.loop(hours=24)
@@ -248,14 +248,6 @@ async def remind_exams():
             user = await bot.fetch_user(user_id)
             await user.send(f"今天有考試: {subject}")
 
-# 刪除過期考試
-@tasks.loop(hours=24)
-async def delete_expired_exams():
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    async with aiosqlite.connect("user.db") as db:
-        await db.execute("DELETE FROM exams WHERE date < ?", (today,))
-        await db.commit()
-
 # 定時提醒課表
 @tasks.loop(seconds=5)
 async def timetable_reminder():
@@ -263,16 +255,8 @@ async def timetable_reminder():
         async with db.execute("SELECT user_id, subject, weekday, time_slot FROM schedule") as cursor:
             timetable = await cursor.fetchall()
 
-    
     start_time = {
-        1: "08:10",
-        2: "09:10",
-        3: "10:10",
-        4: "11:10",
-        5: "13:00",
-        6: "14:00",
-        7: "15:00",
-        8: "16:00",
+        1: "08:10", 2: "09:10", 3: "10:10", 4: "11:10", 5: "13:00", 6: "14:00", 7: "15:00", 8: "16:00",
     }
 
     today = datetime.datetime.now().weekday() + 1  # 獲取今天是星期幾
@@ -287,9 +271,14 @@ async def timetable_reminder():
             time_diff = (datetime.datetime.combine(datetime.date.today(), start_time_dt) - 
                          datetime.datetime.combine(datetime.date.today(), current_time_dt)).total_seconds() / 60
 
-            if 0 < time_diff <= 5:
-                user = await bot.fetch_user(user_id)
-                await user.send(f"提醒: {subject} 即將開始")
+            print(f"User ID: {user_id}, Subject: {subject}, Time Diff: {time_diff} minutes")  # 添加日誌輸出
 
-webserver.keep_alive()
+            if 0 < time_diff <= 5:
+                try:
+                    user = await bot.fetch_user(user_id)
+                    await user.send(f"提醒: {subject} 即將開始")
+                    print(f"已發送提醒給用戶 {user_id}: {subject} 即將開始")  # 添加日誌輸出
+                except Exception as e:
+                    print(f"無法發送訊息給用戶 {user_id}: {e}")  # 添加錯誤日誌輸出
+
 bot.run(token)

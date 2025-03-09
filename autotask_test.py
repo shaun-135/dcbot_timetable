@@ -1,33 +1,32 @@
 import discord
-from discord.ext import commands, tasks
-from discord.ui import Select, View
+import datetime
+import aiosqlite
+from discord.ext import tasks, commands
+import os
 from dotenv import load_dotenv
 import sqlite3
-import os
-import datetime
-import matplotlib.pyplot as plt
-import pandas as pd
-import aiosqlite
-import webserver
-from matplotlib import font_manager
 
 today = datetime.date.today()
 
 os.makedirs("./downloads", exist_ok=True)
 
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
 load_dotenv()
 token = os.getenv("DISCORD_BOT_TOKEN1")
 
+if token is None:
+    raise ValueError("DISCORD_BOT_TOKEN1 環境變數未設置")
 
-@tasks.loop(seconds=5)
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@tasks.loop(seconds=10)
 async def timetable_reminder():
-    async with aiosqlite.connect("user.db") as db:
-        async with db.execute("SELECT user_id, subject, weekday, time_slot FROM schedule") as cursor:
-            timetable = await cursor.fetchall()
-
+    conn = sqlite3.connect("user.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id, subject, date FROM exams")
+    exams = cursor.fetchall()
+    conn.close()
+    timetable = await cursor.fetchall()
     
     start_time = {
         1: "08:10",
@@ -56,5 +55,9 @@ async def timetable_reminder():
                 user = await bot.fetch_user(user_id)
                 await user.send(f"提醒: {subject} 即將開始")
 
-webserver.keep_alive()
+@bot.event
+async def on_ready():
+    timetable_reminder.start()
+    print(f"Bot is ready. 名稱 ---> {bot.user}")
+
 bot.run(token)
